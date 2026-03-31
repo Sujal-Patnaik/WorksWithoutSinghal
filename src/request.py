@@ -1,3 +1,4 @@
+import copy
 class Node:
   def __init__(self, node_id, x, y, demand, TW_Early, TW_Latest, service_time):
     self.node_id = node_id
