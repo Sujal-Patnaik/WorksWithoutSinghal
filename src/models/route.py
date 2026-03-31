@@ -1,6 +1,6 @@
 import copy
-from src.request import Node
-from src.request import Request
+from src.models.request import Node
+from src.models.request import Request
 
 class Vehicle:
   def __init__(self, vehicle_id, capacity, start_node_id, end_node_id):
