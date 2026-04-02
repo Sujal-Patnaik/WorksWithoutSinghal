@@ -21,5 +21,4 @@ class Route:
         vehicle = problem_data.vehicles[vehicle_id]
         self.visits = [vehicle.start_node_id, vehicle.end_node_id]
         self.assigned_requests = set()
-        self.visits = [vehicle.start_node_id, vehicle.end_node_id]
-        self.assigned_requests = set()
+        
