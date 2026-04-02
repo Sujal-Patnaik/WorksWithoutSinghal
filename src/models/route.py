@@ -1,11 +1,13 @@
 import copy
+import math
 from src.models.request import Node
 from src.models.request import Request
 
 class Vehicle:
-  def __init__(self, vehicle_id, capacity, start_node_id, end_node_id):
+  def __init__(self, vehicle_id, speed, capacity, start_node_id, end_node_id):
     self.vehicle_id = vehicle_id
     self.capacity = capacity
+    self.speed = speed
     self.start_node_id = start_node_id
     self.end_node_id = end_node_id
 
@@ -42,6 +44,30 @@ class Route:
         self.visits.remove(request.pickup.node_id)
         self.visits.remove(request.delivery.node_id)
         self.assigned_requests.remove(request.request_id)
-   
-        
-        
+   def route_length(self,problem_data):
+        dist = 0.0
+        for i in range(len(self.visits)-1):
+          dist += problem_data.distance_matrix[self.visits[i]][self.visits[i+1]]
+        return dist
+   def test_insertion(self, request, pickup_idx : int, delivery_idx : int, problem_data):
+        dummy_list = list(self.visits)
+        dummy_list.insert(pickup_idx, request.pickup.node_id)
+        dummy_list.insert(delivery_idx, request.delivery.node_id)
+        curr_load = 0.0
+        curr_time = 0.0
+        new_dist = 0.0
+        for i in range(len(dummy_list)-1):
+          curr_node = problem_data.nodes[dummy_list[i]]
+          nxt_node = problem_data.nodes[dummy_list[i+1]]
+          curr_load += curr_node.demand
+          if(curr_load > problem_data.vehicles[self.vehicle_id].capacity):
+             return False, float('inf')
+          travel_time = problem_data.distance_matrix[curr_node.node_id][nxt_node.node_id] / problem_data.vehicles[self.vehicle_id].speed
+          arrival_time = curr_node.service_time + travel_time + curr_time
+          arrival_time = max(arrival_time, nxt_node.TW_Early)
+          if(arrival_time > nxt_node.TW_Latest):
+            return False, float('inf')
+          curr_time = arrival_time
+          new_dist += problem_data.distance_matrix[curr_node.node_id][nxt_node.node_id]
+        cost_increases = new_dist - self.route_length(problem_data)
+        return True, cost_increases
