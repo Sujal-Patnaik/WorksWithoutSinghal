@@ -14,6 +14,19 @@ class ProblemData:
         self.nodes = {n.node_id: n for n in nodes}
         self.requests = {r.request_id: r for r in requests}
         self.vehicles = {v.vehicle_id: v for v in vehicles}
+        self.distance_matrix = self._build_distance_matrix()
+
+    def _build_distance_matrix(self):
+        matrix = {}
+        for i_id, n_i in self.nodes.items():
+            matrix[i_id] = {}
+            for j_id, n_j in self.nodes.items():
+                if i_id == j_id:
+                    matrix[i_id][j_id] = 0.0
+                else:
+                    dist = math.hypot(n_i.x - n_j.x, n_i.y - n_j.y)
+                    matrix[i_id][j_id] = dist
+        return matrix
 
 class Route:
     def __init__(self, vehicle_id: int, problem_data: ProblemData):
