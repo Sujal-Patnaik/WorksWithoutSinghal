@@ -49,6 +49,16 @@ class Route:
         for i in range(len(self.visits)-1):
           dist += problem_data.distance_matrix[self.visits[i]][self.visits[i+1]]
         return dist
+   def route_time(self, problem_data):  
+        curr_time = 0.0
+        for i in range(len(self.visits)-1):
+            curr_node = problem_data.nodes[self.visits[i]]
+            nxt_node = problem_data.nodes[self.visits[i+1]]
+            travel_time = problem_data.distance_matrix[curr_node.node_id][nxt_node.node_id] / problem_data.vehicles[self.vehicle_id].speed
+            arrival_time = curr_time + curr_node.service_time + travel_time
+            arrival_time = max(arrival_time, nxt_node.TW_Early)           
+            curr_time = arrival_time          
+        return curr_time
    def test_insertion(self, request, pickup_idx : int, delivery_idx : int, problem_data):
         dummy_list = list(self.visits)
         dummy_list.insert(pickup_idx, request.pickup.node_id)
@@ -69,5 +79,7 @@ class Route:
             return False, float('inf')
           curr_time = arrival_time
           new_dist += problem_data.distance_matrix[curr_node.node_id][nxt_node.node_id]
-        cost_increases = new_dist - self.route_length(problem_data)
+        dist_increases = new_dist - self.route_length(problem_data)
+        time_increases = curr_time - self.route_time(problem_data)
+        cost_increases=dist_increases+time_increases
         return True, cost_increases
