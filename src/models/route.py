@@ -21,4 +21,14 @@ class Route:
         vehicle = problem_data.vehicles[vehicle_id]
         self.visits = [vehicle.start_node_id, vehicle.end_node_id]
         self.assigned_requests = set()
+   def insert_request(self, request: Request, pickup_idx: int, delivery_idx: int):
+        self.visits.insert(pickup_idx, request.pickup.node_id)
+        self.visits.insert(delivery_idx, request.delivery.node_id)
+        self.assigned_requests.add(request.request_id)
+   def remove_request(self, request: Request):
+        self.visits.remove(request.pickup.node_id)
+        self.visits.remove(request.delivery.node_id)
+        self.assigned_requests.remove(request.request_id)
+   
+        
         
