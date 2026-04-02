@@ -17,6 +17,6 @@ class Request:
     self.feasible_fleet = feasible_fleet
   def __deepcopy__(self,memo):
     new_request = Request(request_id = self.request_id, pickup = self.pickup, delivery = self.delivery,
-                          feasible_fleet = copy.deepcopy(self.feasible_vehicles,memo))
+                          feasible_fleet = copy.deepcopy(self.feasible_fleet,memo))
     memo[id(self)] = new_request
-    return new request
+    return new_request
