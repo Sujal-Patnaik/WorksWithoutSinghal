@@ -36,20 +36,20 @@ class Route:
         vehicle = problem_data.vehicles[vehicle_id]
         self.visits = [vehicle.start_node_id, vehicle.end_node_id]
         self.assigned_requests = set()
-   def insert_request(self, request: Request, pickup_idx: int, delivery_idx: int):
+    def insert_request(self, request: Request, pickup_idx: int, delivery_idx: int):
         self.visits.insert(pickup_idx, request.pickup.node_id)
         self.visits.insert(delivery_idx, request.delivery.node_id)
         self.assigned_requests.add(request.request_id)
-   def remove_request(self, request: Request):
+    def remove_request(self, request: Request):
         self.visits.remove(request.pickup.node_id)
         self.visits.remove(request.delivery.node_id)
         self.assigned_requests.remove(request.request_id)
-   def route_length(self,problem_data):
+    def route_length(self,problem_data):
         dist = 0.0
         for i in range(len(self.visits)-1):
           dist += problem_data.distance_matrix[self.visits[i]][self.visits[i+1]]
         return dist
-   def route_time(self, problem_data):  
+    def route_time(self, problem_data):  
         curr_time = 0.0
         for i in range(len(self.visits)-1):
             curr_node = problem_data.nodes[self.visits[i]]
@@ -59,7 +59,7 @@ class Route:
             arrival_time = max(arrival_time, nxt_node.TW_Early)           
             curr_time = arrival_time          
         return curr_time
-   def test_insertion(self, request, pickup_idx : int, delivery_idx : int, problem_data):
+    def test_insertion(self, request, pickup_idx : int, delivery_idx : int, problem_data,weight_distance,weight_time):
         dummy_list = list(self.visits)
         dummy_list.insert(pickup_idx, request.pickup.node_id)
         dummy_list.insert(delivery_idx, request.delivery.node_id)
@@ -81,5 +81,14 @@ class Route:
           new_dist += problem_data.distance_matrix[curr_node.node_id][nxt_node.node_id]
         dist_increases = new_dist - self.route_length(problem_data)
         time_increases = curr_time - self.route_time(problem_data)
-        cost_increases=dist_increases+time_increases
+        cost_increases=(weight_distance)*dist_increases + (weight_time)*time_increases
         return True, cost_increases
+    
+    def __deepcopy__(self, memo):
+        new_route = Route.__new__(Route)
+        new_route.vehicle_id = self.vehicle_id
+        new_route.visits = list(self.visits) 
+        new_route.assigned_requests = set(self.assigned_requests)
+        memo[id(self)] = new_route
+        return new_route
+    

@@ -1,8 +1,8 @@
 import copy
 from src.models.route import Route
-
+from src.models.request import Request
 class Solution:
-    def __init__(self, routes=None, unassigned_requests=None):
+    def __init__(self, routes:list[Route]=None, unassigned_requests:list[int]=None):
         self.routes = routes if routes is not None else []
         self.unassigned_requests = unassigned_requests if unassigned_requests is not None else []
         
