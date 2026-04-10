@@ -11,6 +11,6 @@ class ALNSConfig:
     sigma_1: float = 33
     sigma_2: float = 9
     sigma_3: float = 13
-    reaction_factor = 0.1
+    reaction_factor: float = 0.1
     cooling_rate: float = 0.9995
     w_param: float = 0.05
