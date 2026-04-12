@@ -20,6 +20,11 @@ class ALNSSolver:
 
         self.rem_attempts = [0]*len(removal_ops)
         self.ins_attempts = [0]*len(insertion_ops)
+
+        self.noise_weights=[1.0,1.0]
+        self.noise_scores=[0.0,0.0]
+        self.noise_attempts=[0,0]
+
         self.visited_solutions = set()
     
     def hash_solutions(self,solution):
@@ -51,6 +56,12 @@ class ALNSSolver:
                 self.ins_weights[i] = self.ins_weights[i]*(1-r) + r*(self.ins_scores[i]/self.ins_attempts[i])
             self.ins_scores[i] = 0.0
             self.ins_attempts[i] = 0
+
+        for i in range(2):
+            if self.noise_attempts[i]>0:
+                self.noise_weights[i]=self.noise_weights[i]*(1-r) + r*(self.noise_scores[i]/self.noise_attempts[i])
+            self.noise_scores[i]=0.0
+            self.noise_attempts[i]=0
     
     def solve(self):
         temperature=self.calc_T_start()
@@ -60,14 +71,19 @@ class ALNSSolver:
             rem_op, rem_idx=self.select_operator(self.removal_ops,self.rem_weights)
             ins_op, ins_idx= self.select_operator(self.insertion_ops,self.ins_weights)
 
+            noise_idx=random.choices([0,1], weights=self.noise_weights, k=1)[0]
+            use_noise=(noise_idx==1)
+
             self.rem_attempts[rem_idx]+=1
             self.ins_attempts[ins_idx]+=1
+            self.noise_attempts[noise_idx]+=1
 
             total_reqs=len(self.problem_data.requests)
             q=random.randint(max(1,int(0.1*total_reqs)),max(2,int(0.4*total_reqs)))   #To be updated later if needed for handling noise.
             
             destroyed_sol, removed_reqs=rem_op(self.current_solution, self.problem_data,q)
-            repaired_sol= ins_op(destroyed_sol,self.problem_data)
+            max_noise_val=self.config.eta*self.problem_data.max_distance if use_noise else 0.0
+            repaired_sol= ins_op(destroyed_sol,self.problem_data,self.config, max_noise=max_noise_val)
 
             current_cost=self.current_solution.global_cost
             new_cost=repaired_sol.global_cost
@@ -98,6 +114,7 @@ class ALNSSolver:
                 
             self.rem_scores[rem_idx]+=score
             self.ins_scores[ins_idx]+=score
+            self.noise_scores[noise_idx]+=score
 
             if accepted:
                 self.visited_solutions.add(sol_hash)

@@ -14,3 +14,4 @@ class ALNSConfig:
     reaction_factor: float = 0.1
     cooling_rate: float = 0.9995
     w_param: float = 0.05
+    eta=0.025

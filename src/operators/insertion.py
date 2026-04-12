@@ -1,6 +1,7 @@
+import random
 from src.models.solution import Solution
 
-def regret_k_insertion(solution: Solution, problem_data, k: int = 2, num_to_insert: int = None):
+def regret_k_insertion(solution: Solution, problem_data, config, k: int = 2, num_to_insert: int = None, max_noise: float=0.0):
     if num_to_insert is None:
         num_to_insert = len(solution.unassigned_requests)
         
@@ -26,12 +27,17 @@ def regret_k_insertion(solution: Solution, problem_data, k: int = 2, num_to_inse
                 for p_idx in range(1, len(route.visits)):
                     for d_idx in range(p_idx + 1, len(route.visits) + 1):
                         is_feasible, cost_increase = route.test_insertion(
-                            request, p_idx, d_idx, problem_data
+                            request, p_idx, d_idx, problem_data, config.weight_distance, config.weight_time
                         )                
-                        if is_feasible and cost_increase < best_cost_in_route:
-                            best_cost_in_route = cost_increase
-                            best_p_in_route = p_idx
-                            best_d_in_route = d_idx
+                        if is_feasible:
+                            if max_noise > 0:
+                                noise_val = random.uniform(-max_noise,max_noise)
+                                cost_increase=max(0.0,cost_increase+noise_val)
+                            if cost_increase < best_cost_in_route:
+                                best_cost_in_route=cost_increase
+                                best_p_in_route=p_idx
+                                best_d_in_route=d_idx
+
                 if best_cost_in_route != float('inf'):
                     route_options.append({
                         'cost': best_cost_in_route,
@@ -74,5 +80,9 @@ def regret_k_insertion(solution: Solution, problem_data, k: int = 2, num_to_inse
         else:
             break
             
-    solution.evaluate(problem_data)
+    solution.evaluate(
+        problem_data,
+        weight_distance=config.weight_distance,
+        weight_time=config.weight_time
+    )
     return solution

@@ -17,6 +17,7 @@ class ProblemData:
         self.requests = {r.request_id: r for r in requests}
         self.vehicles = {v.vehicle_id: v for v in vehicles}
         self.distance_matrix = self._build_distance_matrix()
+        self.max_distance = max(max(row.values()) for row in self.distance_matrix.values()) if self.distance_matrix else 1.0
 
     def _build_distance_matrix(self):
         matrix = {}
