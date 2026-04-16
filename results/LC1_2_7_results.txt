@@ -1,0 +1,11 @@
+=============================================
+             FINAL RESULTS
+=============================================
+File Tested:           LC1_2_7.txt
+Total Execution Time:  51.53 seconds
+Vehicles Used:         20
+Total Distance:        2701.04
+Total Time:            20708.35
+Unassigned Requests:   0
+Global Cost:           2701.04
+=============================================

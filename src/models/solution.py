@@ -1,10 +1,9 @@
-import copy
 from src.models.route import Route
 from src.models.request import Request
 class Solution:
     def __init__(self, routes:list[Route]=None, unassigned_requests:list[int]=None):
         self.routes = routes if routes is not None else []
-        self.unassigned_requests = unassigned_requests if unassigned_requests is not None else []
+        self.unassigned_requests = set(unassigned_requests) if unassigned_requests is not None else set()
         
         self.total_distance = 0.0
         self.total_time = 0.0
@@ -32,15 +31,11 @@ class Solution:
             assigned.extend(list(route.assigned_requests))
         return assigned
 
-    def __deepcopy__(self, memo):
-        new_solution = Solution(
-            routes=copy.deepcopy(self.routes, memo),
-            unassigned_requests=copy.copy(self.unassigned_requests)
-        )
-        new_solution.total_distance = self.total_distance
-        new_solution.total_time = self.total_time
-        new_solution.unassigned_penalty = self.unassigned_penalty
-        new_solution.global_cost = self.global_cost
-        
-        memo[id(self)] = new_solution
-        return new_solution
+    def clone(self):
+        new_sol = Solution.__new__(Solution)
+        new_sol.routes = [r.clone() for r in self.routes]
+        new_sol.unassigned_requests = set(self.unassigned_requests)
+        new_sol.total_distance = self.total_distance
+        new_sol.total_time = self.total_time
+        new_sol.global_cost = self.global_cost
+        return new_sol

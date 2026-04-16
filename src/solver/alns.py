@@ -1,12 +1,11 @@
 import math
 import random
-import copy
 
 class ALNSSolver:
     def __init__(self,problem_data,initial_solution,removal_ops,insertion_ops,config):
         self.problem_data = problem_data
-        self.best_solution = copy.deepcopy(initial_solution)
-        self.current_solution = copy.deepcopy(initial_solution)
+        self.best_solution = initial_solution.clone()
+        self.current_solution = initial_solution.clone()
         self.config = config
 
         self.removal_ops = removal_ops
@@ -66,6 +65,14 @@ class ALNSSolver:
     def solve(self):
         temperature=self.calc_T_start()
         self.visited_solutions.add(self.hash_solutions(self.current_solution))
+        
+        # Diagnostics
+        improvement_count = 0
+        accepted_count = 0
+        same_cost_count = 0
+        worse_count = 0
+        unassigned_count = 0
+        iterations_stuck = 0  # Track iterations without improvement
 
         for i in range(1,self.config.iterations+1):
             rem_op, rem_idx=self.select_operator(self.removal_ops,self.rem_weights)
@@ -79,7 +86,8 @@ class ALNSSolver:
             self.noise_attempts[noise_idx]+=1
 
             total_reqs=len(self.problem_data.requests)
-            q=random.randint(max(1,int(0.1*total_reqs)),max(2,int(0.4*total_reqs)))   #To be updated later if needed for handling noise.
+            # Removal size: 4-12% for balance
+            q=random.randint(max(1,int(0.04*total_reqs)),max(1,int(0.12*total_reqs)))
             
             destroyed_sol, removed_reqs=rem_op(self.current_solution, self.problem_data,q)
             max_noise_val=self.config.eta*self.problem_data.max_distance if use_noise else 0.0
@@ -95,28 +103,42 @@ class ALNSSolver:
             accepted=False
 
             if new_cost<self.best_solution.global_cost:
-                self.best_solution=copy.deepcopy(repaired_sol)
+                self.best_solution=repaired_sol.clone()
                 self.current_solution=repaired_sol
                 score=self.config.sigma_1
                 accepted=True
+                improvement_count += 1
+                iterations_stuck = 0
             elif new_cost<current_cost:
                 self.current_solution=repaired_sol
                 if is_unvisited:
                     score=self.config.sigma_2
                 accepted=True
+                improvement_count += 1
+                iterations_stuck = 0
             else:
-                prob=math.exp(-(new_cost-current_cost)/temperature)
+                # DIVERSIFICATION: if stuck, increase temperature temporarily to accept worse solutions
+                effective_temp = temperature
+                if iterations_stuck > 1000:
+                    effective_temp = temperature * 2.0  # Boost temperature for diversity
+                    
+                prob=math.exp(-(new_cost-current_cost)/effective_temp) if effective_temp > 0 else 0
                 if random.random()<prob:
                     self.current_solution=repaired_sol
                     if is_unvisited:
                         score=self.config.sigma_3
                     accepted=True
+                    worse_count += 1
+                    iterations_stuck = 0
+                else:
+                    same_cost_count += 1
+                    iterations_stuck += 1
                 
-            self.rem_scores[rem_idx]+=score
-            self.ins_scores[ins_idx]+=score
-            self.noise_scores[noise_idx]+=score
-
+            if len(repaired_sol.unassigned_requests) > 0:
+                unassigned_count += 1
+                
             if accepted:
+                accepted_count += 1
                 self.visited_solutions.add(sol_hash)
             
             if i%self.config.segment_length==0:
@@ -124,8 +146,19 @@ class ALNSSolver:
             
             temperature*=self.config.cooling_rate
 
-            if i%500==0:
-                print(f"Iteration {i}/{self.config.iterations} | Best Cost: {self.best_solution.global_cost:.2f} | Temp: {temperature:.2f}")
+            # Smart logging: show progress proportionally
+            log_interval = max(100, self.config.iterations // 10)  # Show ~10 updates
+            if i%log_interval==0:
+                print(f"Iteration {i}/{self.config.iterations} | Best Cost: {self.best_solution.global_cost:.2f} | Temp: {temperature:.2f} | Stuck: {iterations_stuck}")
+        
+        # Final diagnostics
+        print(f"\n=== ALNS Diagnostics ===")
+        print(f"Improvements found: {improvement_count}")
+        print(f"Accepted moves: {accepted_count} ({100*accepted_count/self.config.iterations:.1f}%)")
+        print(f"Worse solutions accepted: {worse_count}")
+        print(f"Rejected same-cost moves: {same_cost_count}")
+        print(f"Solutions with unassigned: {unassigned_count}")
+        print(f"=== End Diagnostics ===")
 
         return self.best_solution
             

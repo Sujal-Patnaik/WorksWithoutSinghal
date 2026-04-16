@@ -1,4 +1,3 @@
-import copy
 import math
 from src.models.request import Node
 from src.models.request import Request
@@ -17,16 +16,18 @@ class ProblemData:
         self.requests = {r.request_id: r for r in requests}
         self.vehicles = {v.vehicle_id: v for v in vehicles}
         self.distance_matrix = self._build_distance_matrix()
-        self.max_distance = max(max(row.values()) for row in self.distance_matrix.values()) if self.distance_matrix else 1.0
+        self.max_distance = max(max(row) for row in self.distance_matrix) if self.distance_matrix else 1.0
 
     def _build_distance_matrix(self):
-        matrix = {}
+        # Find the max node ID to size the matrix correctly
+        max_id = max(self.nodes.keys()) if self.nodes else 0
+        
+        # Initialize a 2D list with zeros
+        matrix = [[0.0] * (max_id + 1) for _ in range(max_id + 1)]
+        
         for i_id, n_i in self.nodes.items():
-            matrix[i_id] = {}
             for j_id, n_j in self.nodes.items():
-                if i_id == j_id:
-                    matrix[i_id][j_id] = 0.0
-                else:
+                if i_id != j_id:
                     dist = math.hypot(n_i.x - n_j.x, n_i.y - n_j.y)
                     matrix[i_id][j_id] = dist
         return matrix
@@ -60,7 +61,7 @@ class Route:
             arrival_time = max(arrival_time, nxt_node.TW_Early)           
             curr_time = arrival_time          
         return curr_time
-    def test_insertion(self, request, pickup_idx : int, delivery_idx : int, problem_data,weight_distance,weight_time):
+    def test_insertion(self, request, pickup_idx : int, delivery_idx : int, problem_data, weight_distance, weight_time, curr_route_length=None, curr_route_time=None):
         dummy_list = list(self.visits)
         dummy_list.insert(pickup_idx, request.pickup.node_id)
         dummy_list.insert(delivery_idx, request.delivery.node_id)
@@ -80,16 +81,20 @@ class Route:
             return False, float('inf')
           curr_time = arrival_time
           new_dist += problem_data.distance_matrix[curr_node.node_id][nxt_node.node_id]
-        dist_increases = new_dist - self.route_length(problem_data)
-        time_increases = curr_time - self.route_time(problem_data)
-        cost_increases=(weight_distance)*dist_increases + (weight_time)*time_increases
+        
+        if curr_route_length is None:
+            curr_route_length = self.route_length(problem_data)
+        if curr_route_time is None:
+            curr_route_time = self.route_time(problem_data)
+
+        dist_increases = new_dist - curr_route_length
+        time_increases = curr_time - curr_route_time
+        cost_increases = (weight_distance) * dist_increases + (weight_time) * time_increases
         return True, cost_increases
     
-    def __deepcopy__(self, memo):
+    def clone(self):
         new_route = Route.__new__(Route)
         new_route.vehicle_id = self.vehicle_id
-        new_route.visits = list(self.visits) 
-        new_route.assigned_requests = set(self.assigned_requests)
-        memo[id(self)] = new_route
+        new_route.visits = list(self.visits) # Fast list slice
+        new_route.assigned_requests = set(self.assigned_requests) # Fast set copy
         return new_route
-    
