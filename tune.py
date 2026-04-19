@@ -14,7 +14,8 @@ from src.operators.removal import random_removal, worst_removal, shaw_removal
 from src.solver.two_stage import TwoStageSolver
 
 # --- Main Imports ---
-from main import parse_li_lim_benchmark, ALNSConfig
+from main import parse_li_lim_benchmark
+from src.utils.config import ALNSConfig
 
 # 1. Define our "Validation Set" using the hard Random datasets
 # We avoid LC (Clustered) files because they are too easy and cause overfitting
@@ -93,8 +94,8 @@ def objective(trial):
 
 
 def main():
-    print("=== Optuna ALNS Hyperparameter Tuner ===")
-    print(f"Tuning against {len(VALIDATION_FILES)} hard validation datasets...")
+    print("ALNS hyperparameter tuning")
+    print(f"Validation datasets: {len(VALIDATION_FILES)}")
     
     # Suppress extreme console spam to make it readable
     optuna.logging.set_verbosity(optuna.logging.WARNING)
@@ -102,25 +103,23 @@ def main():
     # Create an Optuna study to MINIMIZE the returned cost
     study = optuna.create_study(direction="minimize")
     
-    print("Starting 20 intelligent trials. This will take roughly 15-20 minutes...\n")
+    print("Running 20 trials...\n")
     
     # Run the optimization
     for i in range(20):  
         study.optimize(objective, n_trials=1)
         print(f"Trial {i+1}/20 Complete | Current Best Average Cost: {study.best_value:.2f}")
     
-    print("\n" + "="*45)
-    print("              🎉 TUNING COMPLETE 🎉")
-    print("="*45)
-    print(f"Best Average Cost Found: {study.best_value:.2f}\n")
-    print("Copy these Best Parameters into your main.py ALNSConfig:")
+    print("\nTuning complete")
+    print(f"Best average cost: {study.best_value:.2f}\n")
+    print("Best parameters for ALNSConfig:")
     
     for key, value in study.best_params.items():
         if isinstance(value, float):
             print(f"  {key} = {value:.4f}")
         else:
             print(f"  {key} = {value}")
-    print("="*45)
+    print("Done")
 
 if __name__ == "__main__":
     main()

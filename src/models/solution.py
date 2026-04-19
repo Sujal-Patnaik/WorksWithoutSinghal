@@ -37,5 +37,6 @@ class Solution:
         new_sol.unassigned_requests = set(self.unassigned_requests)
         new_sol.total_distance = self.total_distance
         new_sol.total_time = self.total_time
+        new_sol.unassigned_penalty = self.unassigned_penalty
         new_sol.global_cost = self.global_cost
         return new_sol

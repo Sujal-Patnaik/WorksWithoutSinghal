@@ -1,76 +1,103 @@
-#!/usr/bin/env python3
-"""
-Quick test to see if removal + insertion creates better neighbors or just shuffles
-"""
+import random
 
-import sys
-sys.path.insert(0, '.')
-
+from src.models.request import Node, Request
+from src.models.route import ProblemData, Route, Vehicle
 from src.models.solution import Solution
-from src.models.route import Route
-from src.models.request import Request
-from src.operators.removal import random_removal, shaw_removal, worst_removal
 from src.operators.insertion import regret_k_insertion
-from main import ALNSConfig, parse_li_lim_benchmark
+from src.operators.removal import random_removal
+from src.solver.alns import ALNSSolver
+from src.utils.config import ALNSConfig
 
-# Load real problem
-import os
-os.chdir(r'c:\Users\sujal\WorksWithoutSinghal')
-problem_data = parse_li_lim_benchmark("pdp_200/LC1_2_1.txt")
-config = ALNSConfig()
 
-print(f"Testing on: {len(problem_data.requests)} requests, {len(problem_data.vehicles)} vehicles")
+class _FixedPolicy:
+    def begin_run(self):
+        return
 
-# Create initial solution using regret-k for fair test
-sol = Solution([Route() for _ in range(len(problem_data.vehicles))], set(problem_data.requests.keys()))
-best_sol = regret_k_insertion(sol, problem_data, config)
-best_sol.evaluate(problem_data, config.penalty_per_unassigned, config.weight_distance, config.weight_time)
+    def select(self, state_vector, num_removal_ops, num_insertion_ops, context):
+        return 0, 0, 0
 
-print(f"\nInitial solution cost: {best_sol.global_cost:.2f}")
-print(f"  Distance: {best_sol.total_distance:.2f}")
-print(f"  Time: {best_sol.total_time:.2f}")
-print(f"  Unassigned: {len(best_sol.unassigned_requests)}")
+    def observe(self, state_vector, reward, accepted, is_new_best):
+        return
 
-# Test 100 destruction/repair cycles
-better_count = 0
-same_count = 0
-worse_count = 0
-improvement_sum = 0
-cost_diffs = []
 
-print("\nTesting 100 destruction/repair cycles...")
-for cycle in range(100):
-    # Random removal of 8 requests
-    destroyed, _ = random_removal(best_sol, problem_data, 8)
-    
-    # Repair with regret-k
-    repaired = regret_k_insertion(destroyed, problem_data, config)
-    repaired.evaluate(problem_data, config.penalty_per_unassigned, config.weight_distance, config.weight_time)
-    
-    cost_diff = repaired.global_cost - best_sol.global_cost
-    cost_diffs.append(cost_diff)
-    
-    if cost_diff < -0.01:  # Better
-        better_count += 1
-        improvement_sum += abs(cost_diff)
-    elif cost_diff <= 0.01:  # Same
-        same_count += 1
-    else:  # Worse
-        worse_count += 1
+def _build_single_request_problem():
+    depot = Node(node_id=0, x=0.0, y=0.0, demand=0.0, TW_Early=0.0, TW_Latest=1000.0, service_time=0.0)
+    pickup = Node(node_id=1, x=1.0, y=0.0, demand=1.0, TW_Early=0.0, TW_Latest=1000.0, service_time=0.0)
+    delivery = Node(node_id=2, x=2.0, y=0.0, demand=-1.0, TW_Early=0.0, TW_Latest=1000.0, service_time=0.0)
 
-print(f"\nResults of 100 removal+insertion cycles:")
-print(f"  Better: {better_count} ({100*better_count/100:.1f}%)")
-print(f"  Same:   {same_count} ({100*same_count/100:.1f}%)")
-print(f"  Worse:  {worse_count} ({100*worse_count/100:.1f}%)")
-print(f"  Avg improvement when better: {improvement_sum/max(1,better_count):.2f}")
-print(f"  Min cost diff: {min(cost_diffs):.2f}")
-print(f"  Max cost diff: {max(cost_diffs):.2f}")
+    req = Request(request_id=1, pickup=pickup, delivery=delivery)
+    vehicle = Vehicle(vehicle_id=0, speed=1.0, capacity=2.0, start_node_id=0, end_node_id=0)
 
-print(f"\nConclusion:")
-if better_count < 5:
-    print("  ⚠️  PROBLEM: Removal+insertion rarely creates better neighbors (<5%)")
-    print("  This explains why Stage 2 can't improve!")
-elif better_count < 20:
-    print("  ⚠️  LIMITED: Few improving neighbors (~10%), needs larger removal or different strategy")
-else:
-    print("  ✓ Acceptable: Removal+insertion finding improving neighbors regularly")
+    return ProblemData(nodes=[depot, pickup, delivery], requests=[req], vehicles=[vehicle])
+
+
+def test_random_removal_uses_config_penalty():
+    problem_data = _build_single_request_problem()
+    route = Route(vehicle_id=0, problem_data=problem_data)
+    route.insert_request(problem_data.requests[1], 1, 2)
+
+    solution = Solution(routes=[route], unassigned_requests=[])
+    cfg = ALNSConfig(unassigned_penalty=7777.0, weight_distance=1.0, weight_time=0.0)
+    solution.evaluate(
+        problem_data,
+        penalty_per_unassigned=cfg.unassigned_penalty,
+        weight_distance=cfg.weight_distance,
+        weight_time=cfg.weight_time,
+    )
+
+    destroyed, removed = random_removal(solution, problem_data, q=1, config=cfg, rng=random.Random(0))
+
+    assert removed == [1]
+    assert len(destroyed.unassigned_requests) == 1
+    assert destroyed.global_cost == 7777.0
+
+
+def test_regret_k_insertion_uses_config_objective():
+    problem_data = _build_single_request_problem()
+    route = Route(vehicle_id=0, problem_data=problem_data)
+
+    solution = Solution(routes=[route], unassigned_requests=[1])
+    cfg = ALNSConfig(unassigned_penalty=5000.0, weight_distance=1.0, weight_time=0.0)
+
+    repaired = regret_k_insertion(solution, problem_data, cfg, rng=random.Random(0))
+
+    assert len(repaired.unassigned_requests) == 0
+    assert repaired.total_distance == 4.0
+    assert repaired.global_cost == 4.0
+
+
+def test_alns_accumulates_operator_scores_on_acceptance():
+    problem_data = _build_single_request_problem()
+
+    initial_solution = Solution(routes=[], unassigned_requests=[])
+    initial_solution.total_distance = 10.0
+    initial_solution.total_time = 0.0
+    initial_solution.global_cost = 50.0
+
+    cfg = ALNSConfig(iterations=1, segment_length=10, sigma_1=33.0, sigma_2=9.0, sigma_3=13.0)
+
+    def rem_op(solution, problem_data, q, config=None, rng=None):
+        return solution.clone(), []
+
+    def ins_op(solution, problem_data, config, k=2, num_to_insert=None, max_noise=0.0, rng=None):
+        improved = solution.clone()
+        improved.total_distance = max(0.0, solution.total_distance - 1.0)
+        improved.total_time = solution.total_time
+        improved.global_cost = solution.global_cost - 1.0
+        return improved
+
+    solver = ALNSSolver(
+        problem_data=problem_data,
+        initial_solution=initial_solution,
+        removal_ops=[rem_op],
+        insertion_ops=[ins_op],
+        config=cfg,
+        selection_policy=_FixedPolicy(),
+        rng=random.Random(0),
+    )
+
+    solver.solve()
+
+    assert solver.rem_scores[0] == cfg.sigma_1
+    assert solver.ins_scores[0] == cfg.sigma_1
+    assert solver.noise_scores[0] == cfg.sigma_1

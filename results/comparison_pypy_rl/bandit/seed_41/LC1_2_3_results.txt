@@ -1,0 +1,13 @@
+=============================================
+             FINAL RESULTS
+=============================================
+File Tested:           LC1_2_3.txt
+Policy Mode:           bandit
+Seed:                  44
+Total Execution Time:  25.14 seconds
+Vehicles Used:         18
+Total Distance:        2772.18
+Total Time:            21219.50
+Unassigned Requests:   0
+Global Cost:           2772.18
+=============================================

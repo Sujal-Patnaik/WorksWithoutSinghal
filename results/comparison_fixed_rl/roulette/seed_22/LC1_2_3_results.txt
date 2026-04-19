@@ -1,0 +1,13 @@
+=============================================
+             FINAL RESULTS
+=============================================
+File Tested:           LC1_2_3.txt
+Policy Mode:           roulette
+Seed:                  25
+Total Execution Time:  72.82 seconds
+Vehicles Used:         18
+Total Distance:        2778.31
+Total Time:            21287.22
+Unassigned Requests:   0
+Global Cost:           2778.31
+=============================================

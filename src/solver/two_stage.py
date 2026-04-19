@@ -1,15 +1,45 @@
 from src.solver.alns import ALNSSolver
 from src.utils.config import ALNSConfig
+from src.solver.policies import RouletteSelectionPolicy, OnlineLinearBanditPolicy
 
 class TwoStageSolver:
-    def __init__(self, problem_data, initial_solution, removal_ops, insertion_ops, config):
+    def __init__(
+        self,
+        problem_data,
+        initial_solution,
+        removal_ops,
+        insertion_ops,
+        config,
+        policy_mode="roulette",
+        policy_factory=None,
+        iteration_logger=None,
+        rng=None,
+    ):
         self.problem_data = problem_data
         self.initial_solution = initial_solution
         self.removal_ops = removal_ops
         self.insertion_ops = insertion_ops
         self.base_config = config
+        self.policy_mode = policy_mode
+        self.policy_factory = policy_factory
+        self.iteration_logger = iteration_logger
+        self.rng = rng
 
         self.best_feasible_solution = initial_solution.clone()
+
+    def _build_policy(self, stage_name):
+        if self.policy_factory is not None:
+            return self.policy_factory(stage_name)
+
+        if self.policy_mode == "bandit":
+            return OnlineLinearBanditPolicy(
+                feature_dim=10,
+                alpha=getattr(self.base_config, "bandit_alpha", 0.8),
+                epsilon=getattr(self.base_config, "bandit_epsilon", 0.05),
+                rng=self.rng,
+            )
+
+        return RouletteSelectionPolicy(self.rng)
 
     def remove_smallest_route(self, solution):
         if not solution.routes:
@@ -38,7 +68,7 @@ class TwoStageSolver:
             weight_distance=self.base_config.weight_distance,
             weight_time=self.base_config.weight_time,
             unassigned_penalty=100000.0,  # Very high to force feasibility
-            iterations=3000,  # Increased for better fleet minimization
+            iterations=getattr(self.base_config, "stage1_iterations", 3000),
             segment_length=100,
             sigma_1=self.base_config.sigma_1,
             sigma_2=self.base_config.sigma_2,
@@ -65,7 +95,11 @@ class TwoStageSolver:
                 destroyed_solution,
                 self.removal_ops,
                 self.insertion_ops,
-                stage_1_config
+                stage_1_config,
+                selection_policy=self._build_policy("stage1"),
+                iteration_logger=self.iteration_logger,
+                stage_name="stage1",
+                rng=self.rng,
             )
             candidate_solution = alns.solve()
 
@@ -96,7 +130,11 @@ class TwoStageSolver:
             self.best_feasible_solution,
             self.removal_ops,
             self.insertion_ops,
-            self.base_config
+            self.base_config,
+            selection_policy=self._build_policy("stage2"),
+            iteration_logger=self.iteration_logger,
+            stage_name="stage2",
+            rng=self.rng,
         )
 
         final_solution = alns.solve()

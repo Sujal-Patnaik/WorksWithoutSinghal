@@ -34,5 +34,10 @@ def build_initial_greedy_solution(solution: Solution, problem_data: ProblemData,
         else:
             print("Stopping early : ",len(unplanned_requests),"requests are completely infeasible")
             break
-    solution.evaluate(problem_data)
+    solution.evaluate(
+        problem_data,
+        penalty_per_unassigned=config.unassigned_penalty,
+        weight_distance=config.weight_distance,
+        weight_time=config.weight_time,
+    )
     return solution

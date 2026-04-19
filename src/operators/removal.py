@@ -90,11 +90,25 @@ def _compute_request_cost(solution, problem_data, req_id):
             return dist_diff + time_diff
     return 0.0
 
+
+def _evaluate_with_config(solution, problem_data, config):
+    if config is None:
+        solution.evaluate(problem_data)
+        return
+
+    solution.evaluate(
+        problem_data,
+        penalty_per_unassigned=config.unassigned_penalty,
+        weight_distance=config.weight_distance,
+        weight_time=config.weight_time,
+    )
+
 # ==========================================
 # OPTIMIZED REMOVAL OPERATORS
 # ==========================================
 
-def random_removal(solution, problem_data, q):
+def random_removal(solution, problem_data, q, config=None, rng=None):
+    rng = rng if rng is not None else random
     new_solution = solution.clone()
     assigned_requests = new_solution.get_all_assigned_requests()
     
@@ -106,9 +120,10 @@ def random_removal(solution, problem_data, q):
             route.assigned_requests.clear()
         new_solution.unassigned_requests.update(removed)
         new_solution.routes = [] # Clean up
+        _evaluate_with_config(new_solution, problem_data, config)
         return new_solution, removed
 
-    removed = random.sample(assigned_requests, q)
+    removed = rng.sample(assigned_requests, q)
 
     for req_id in removed:
         req_obj = problem_data.requests[req_id]
@@ -121,12 +136,13 @@ def random_removal(solution, problem_data, q):
 
     # CRITICAL FIX: Clean up empty routes so the insertion operator doesn't break
     new_solution.routes = [r for r in new_solution.routes if len(r.assigned_requests) > 0]
-    new_solution.evaluate(problem_data)
+    _evaluate_with_config(new_solution, problem_data, config)
     
     return new_solution, removed
 
 
-def worst_removal(solution, problem_data, q, p=3.0):
+def worst_removal(solution, problem_data, q, p=3.0, config=None, rng=None):
+    rng = rng if rng is not None else random
     new_solution = solution.clone()
     assigned_requests = new_solution.get_all_assigned_requests()
     
@@ -145,7 +161,7 @@ def worst_removal(solution, problem_data, q, p=3.0):
     
     removed = []
     while len(removed) < q and L:
-        y = random.random()
+        y = rng.random()
         idx = int((y ** p) * len(L))
         idx = min(idx, len(L) - 1)
 
@@ -163,12 +179,13 @@ def worst_removal(solution, problem_data, q, p=3.0):
 
     # CRITICAL FIX: Clean up empty routes
     new_solution.routes = [r for r in new_solution.routes if len(r.assigned_requests) > 0]
-    new_solution.evaluate(problem_data)
+    _evaluate_with_config(new_solution, problem_data, config)
 
     return new_solution, removed
 
 
-def shaw_removal(solution, problem_data, q, p=3.0, phi=9.0, chi=3.0, psi=2.0, omega=5.0):
+def shaw_removal(solution, problem_data, q, p=3.0, phi=9.0, chi=3.0, psi=2.0, omega=5.0, config=None, rng=None):
+    rng = rng if rng is not None else random
     new_solution = solution.clone()
     assigned_requests = list(new_solution.get_all_assigned_requests())
     
@@ -180,17 +197,18 @@ def shaw_removal(solution, problem_data, q, p=3.0, phi=9.0, chi=3.0, psi=2.0, om
             route.assigned_requests.clear()
         new_solution.unassigned_requests.update(removed)
         new_solution.routes = []
+        _evaluate_with_config(new_solution, problem_data, config)
         return new_solution, removed
 
     arrival_times = _calculate_arrival_times(new_solution, problem_data)
     norm_factors = _get_normalization_factors(problem_data)
     
-    initial_r = random.choice(assigned_requests)
+    initial_r = rng.choice(assigned_requests)
     removed = [initial_r] 
     assigned_requests.remove(initial_r) # Take it out of the pool
 
     while len(removed) < q and assigned_requests:
-        r = random.choice(removed)
+        r = rng.choice(removed)
         
         L_with_scores = [
             (req, calculate_relatedness(
@@ -204,7 +222,7 @@ def shaw_removal(solution, problem_data, q, p=3.0, phi=9.0, chi=3.0, psi=2.0, om
         L_with_scores.sort(key=lambda x: x[1])
         L_sorted = [x[0] for x in L_with_scores]
 
-        y = random.random()
+        y = rng.random()
         idx = int((y ** p) * len(L_sorted))
         idx = min(idx, len(L_sorted) - 1)
 
@@ -225,6 +243,6 @@ def shaw_removal(solution, problem_data, q, p=3.0, phi=9.0, chi=3.0, psi=2.0, om
 
     # CRITICAL FIX: Clean up empty routes
     new_solution.routes = [r for r in new_solution.routes if len(r.assigned_requests) > 0]
-    new_solution.evaluate(problem_data)
+    _evaluate_with_config(new_solution, problem_data, config)
 
     return new_solution, removed

@@ -1,7 +1,9 @@
 import random
 from src.models.solution import Solution
 
-def regret_k_insertion(solution: Solution, problem_data, config, k: int = 2, num_to_insert: int = None, max_noise: float=0.0):
+def regret_k_insertion(solution: Solution, problem_data, config, k: int = 2, num_to_insert: int = None, max_noise: float = 0.0, rng=None):
+    rng = rng if rng is not None else random
+
     if num_to_insert is None:
         num_to_insert = len(solution.unassigned_requests)
     
@@ -27,9 +29,8 @@ def regret_k_insertion(solution: Solution, problem_data, config, k: int = 2, num
             route_options = [] 
             
             for route in solution.routes:
-                # ADD THIS: Check the cache first!
-                route_mem_id = id(route)
-                cache_key = (req_id, route_mem_id)
+                route_signature = (route.vehicle_id, tuple(route.visits))
+                cache_key = (req_id, route_signature)
                 
                 if cache_key in cost_cache:
                     cached_cost, cached_p, cached_d = cost_cache[cache_key]
@@ -51,7 +52,7 @@ def regret_k_insertion(solution: Solution, problem_data, config, k: int = 2, num
                         )                
                         if is_feasible:
                             if max_noise > 0:
-                                noise_val = random.uniform(-max_noise, max_noise)
+                                noise_val = rng.uniform(-max_noise, max_noise)
                                 cost_increase = max(0.0, cost_increase + noise_val)
                             if cost_increase < best_cost_in_route:
                                 best_cost_in_route = cost_increase
@@ -74,10 +75,11 @@ def regret_k_insertion(solution: Solution, problem_data, config, k: int = 2, num
             best_option = route_options[0]
             best_route_cost = best_option['cost']
             
-            if len(route_options) < k:
+            if len(route_options) <= 1:
                 regret = float('inf')
             else:
-                regret = sum((route_options[i]['cost'] - best_route_cost) for i in range(1, k))
+                max_rank = min(k, len(route_options))
+                regret = sum((route_options[i]['cost'] - best_route_cost) for i in range(1, max_rank))
                 
             if regret > best_regret:
                 best_regret = regret
@@ -100,15 +102,18 @@ def regret_k_insertion(solution: Solution, problem_data, config, k: int = 2, num
             solution.unassigned_requests.remove(win_request.request_id)
             inserted_count += 1
             
-            # ADD THIS: Delete cache entries for the modified route!
-            mod_route_id = id(win_route)
-            keys_to_delete = [cache_key for cache_key in cost_cache.keys() if cache_key[1] == mod_route_id]
+            # Invalidate all cached insertion plans for the modified route.
+            mod_vehicle_id = win_route.vehicle_id
+            keys_to_delete = [cache_key for cache_key in cost_cache.keys() if cache_key[1][0] == mod_vehicle_id]
             for cache_key in keys_to_delete:
                 del cost_cache[cache_key]
         else:
             break
             
     solution.evaluate(
-        problem_data, weight_distance=config.weight_distance, weight_time=config.weight_time
+        problem_data,
+        penalty_per_unassigned=config.unassigned_penalty,
+        weight_distance=config.weight_distance,
+        weight_time=config.weight_time,
     )
     return solution

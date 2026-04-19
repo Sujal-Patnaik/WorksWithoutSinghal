@@ -1,7 +1,8 @@
 import os
 import time
 import glob
-from dataclasses import dataclass
+import argparse
+import random
 
 # --- Models ---
 from src.models.route import ProblemData, Vehicle, Route
@@ -15,22 +16,8 @@ from src.operators.initial_solution import build_initial_greedy_solution
 
 # --- Solvers ---
 from src.solver.two_stage import TwoStageSolver
-
-@dataclass
-class ALNSConfig:
-    weight_distance: float = 1.0
-    weight_time: float = 0.0        # CRITICAL: Keep at 0.0 to optimize physical distance
-    unassigned_penalty: float = 10000.0
-
-    iterations: int = 5000          # INCREASED: Need more iterations to improve routes
-    segment_length: int = 100       # Match paper (update weights every 100 iters)
-    sigma_1: float = 33.0
-    sigma_2: float = 9.0
-    sigma_3: float = 13.0
-    reaction_factor: float = 0.1    # Paper uses 0.1
-    cooling_rate: float = 0.9985    # Slower cooling for 5000 iterations
-    w_param: float = 0.05
-    eta: float = 0.025
+from src.benchmark.csv_logger import IterationCSVLogger
+from src.utils.config import ALNSConfig
 
 
 def parse_li_lim_benchmark(filepath: str) -> ProblemData:
@@ -96,31 +83,60 @@ def parse_li_lim_benchmark(filepath: str) -> ProblemData:
     return ProblemData(nodes=nodes, requests=requests, vehicles=vehicles)
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="PDPTW Two-Stage ALNS Runner")
+    parser.add_argument("--policy", choices=["roulette", "bandit"], default="roulette")
+    parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--output-folder", default="results")
+    parser.add_argument("--instances-folder", default="pdp_200")
+    parser.add_argument("--max-instances", type=int, default=0)
+    parser.add_argument("--log-iterations", action="store_true")
+    parser.add_argument("--iterations", type=int, default=5000)
+    parser.add_argument("--stage1-iterations", type=int, default=3000)
+    parser.add_argument("--bandit-alpha", type=float, default=0.8)
+    parser.add_argument("--bandit-epsilon", type=float, default=0.05)
+    return parser.parse_args()
+
+
 def main():
+    args = parse_args()
     print("=== PDPTW Two-Stage ALNS Batch Engine ===")
     config = ALNSConfig()
+    config.iterations = args.iterations
+    config.stage1_iterations = args.stage1_iterations
+    config.policy_mode = args.policy
+    config.bandit_alpha = args.bandit_alpha
+    config.bandit_epsilon = args.bandit_epsilon
 
-    folder_name = "pdp_200"
-    output_folder = "results"
+    folder_name = args.instances_folder
+    output_folder = args.output_folder
 
     # Create the output directory if it doesn't exist
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
     # Find all .txt files in the pdp_200 folder
-    file_paths = glob.glob(os.path.join(folder_name, "*.txt"))
+    file_paths = sorted(glob.glob(os.path.join(folder_name, "*.txt")))
+
+    if args.max_instances > 0:
+        file_paths = file_paths[:args.max_instances]
     
     if not file_paths:
         print(f"[!] No benchmark files found in '{folder_name}'. Check your directory!")
         return
 
+    print(f"Policy mode: {args.policy} | Seed: {args.seed}")
     print(f"Found {len(file_paths)} benchmark instances. Starting batch processing...\n")
 
     # Loop through every file
-    for filepath in file_paths:
+    for file_idx, filepath in enumerate(file_paths):
         file_name = os.path.basename(filepath)
         out_filename = file_name.replace('.txt', '_results.txt')
         out_filepath = os.path.join(output_folder, out_filename)
+
+        run_seed = args.seed + file_idx
+        random.seed(run_seed)
+        run_rng = random.Random(run_seed)
 
         print(f"\n{'='*50}")
         print(f" PROCESSING: {file_name}")
@@ -142,18 +158,31 @@ def main():
             insertion_ops = [regret_k_insertion]
 
             # 4. Initialize & Run Solver
+            iter_logger = None
+            if args.log_iterations:
+                csv_name = file_name.replace(
+                    ".txt", f"_{args.policy}_seed{run_seed}_iterations.csv"
+                )
+                iter_logger = IterationCSVLogger(os.path.join(output_folder, csv_name))
+
             solver = TwoStageSolver(
                 problem_data=problem_data,
                 initial_solution=initial_sol,
                 removal_ops=removal_ops,
                 insertion_ops=insertion_ops,
-                config=config
+                config=config,
+                policy_mode=args.policy,
+                iteration_logger=iter_logger,
+                rng=run_rng,
             )
 
             start_time = time.time()
             final_solution = solver.solve()
             end_time = time.time()
             execution_time = end_time - start_time
+
+            if iter_logger is not None:
+                iter_logger.close()
 
             # 5. Build Result String
             vehicles_used = len(final_solution.routes) if final_solution and hasattr(final_solution, 'routes') else "N/A"
@@ -167,6 +196,8 @@ def main():
                 f"             FINAL RESULTS\n"
                 f"=============================================\n"
                 f"File Tested:           {file_name}\n"
+                f"Policy Mode:           {args.policy}\n"
+                f"Seed:                  {run_seed}\n"
                 f"Total Execution Time:  {execution_time:.2f} seconds\n"
                 f"Vehicles Used:         {vehicles_used}\n"
                 f"Total Distance:        {total_dist}\n"
