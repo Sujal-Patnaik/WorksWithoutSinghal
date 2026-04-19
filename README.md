@@ -3,7 +3,6 @@ PyPy-only workflow
 Environment policy
 - Single virtual environment: `.venv-pypy`
 - Runtime/interpreter target: PyPy only
-- Legacy `.venv` (CPython) is intentionally removed
 
 Quick start
 
